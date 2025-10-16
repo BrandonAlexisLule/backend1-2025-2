@@ -22,7 +22,7 @@ Status: [Draft, Ready for view, in Review, Reviewed]
  
 Background:
   El proyecto nace con la finalidad de usar la base de datos abierta del INEGI que contiene información relacionada con las localidades de Baja California,
-  que no se ven normalmente en las páginas web actuales. 
+  que no se ve normalmente en las páginas web actuales. 
 
 Overview:
   En este mapa interactivo de Baja California se podrán ver los estados y se mostrará información importante e interesante que se puede consultar del INEGI en
