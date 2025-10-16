@@ -15,6 +15,7 @@ Status: [Draft, Ready for view, in Review, Reviewed]
   - Se filtrarán los resultados por actividad y por municipio o ciudad, para buscar las empresas dedicadas a estas actividades.
   - Tendrá un buscador que le pedirá al usuario escribir la ciudad o municipio o buscar el tipo de actividad, y deberá mostrar las empresas
   relacionadas con esas actividades.
+  - Cada empresa localizada, tendrá un iconito, en el cual al apuntar con el mouse sin presionar, se puede ver información relevante/importante de la empresa.
 
 - Non-Goals:
   - No se subirá en la web videos, ni imágenes.
