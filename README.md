@@ -26,7 +26,7 @@ Background:
   que no se ve normalmente en las páginas web actuales. 
 
 Overview:
-  En este mapa interactivo de Baja California se podrán ver los estados y se mostrará información importante e interesante que se puede consultar del INEGI en
+  En este mapa interactivo de Baja California se podrán ver las ciudades y se mostrará información importante e interesante que se puede consultar del INEGI en
   su base de datos, tal como los establecimientos, razón social, dirección, etc.  
   
 
