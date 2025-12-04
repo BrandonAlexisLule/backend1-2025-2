@@ -7,7 +7,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 DB_NAME = "dbinegi.db" #Variable para nombre de base de datos
-TABLE_NAME = "No_existe" #Variable para nombre de tabla
+TABLE_NAME = "denue_inegi" #Variable para nombre de tabla
 CSV_FILE = "denue_inegi.csv"  # Archivo de respaldo externo
 
 #Columnas esperadas dentro del CSV
