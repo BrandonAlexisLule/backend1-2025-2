@@ -2,9 +2,12 @@ import os
 import csv
 import sqlite3
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+
 
 #Configuración de la API
 app = Flask(__name__)
+CORS(app)
 
 DB_NAME = "dbinegi.db" #Variable para nombre de base de datos
 TABLE_NAME = "denue_inegi" #Variable para nombre de tabla
@@ -35,7 +38,6 @@ def leer_desde_csv(municipio, actividad, limite=500):
     """Busca registros en el archivo CSV cuando no hay conexión SQLite."""
     if not os.path.exists(CSV_FILE):
         return None, "No se encontró el archivo de respaldo."
-
     resultados = []
     contador = 0
 
@@ -80,15 +82,39 @@ def buscar_detalle_csv(id_empresa):
     try:
         with open(CSV_FILE, encoding="utf-8", mode="r") as archivo:
             lector = csv.DictReader(archivo)
+            # Limpiar encabezados por si traen BOM
+            if lector.fieldnames:
+                limpio = []
+                for col in lector.fieldnames:
+                    limpio.append(col.replace("\ufeff", "").strip())
+                lector.fieldnames = limpio
             for fila in lector:
                 if fila.get(CSV_COLUMNS["id"]) == str(id_empresa):
-                    return fila, None
+                    # Solo retornar las columnas que definiste en CSV_COLUMNS
+                    datos_filtrados = {
+                        clave: fila.get(columna, "")
+                        for clave, columna in CSV_COLUMNS.items()
+                    }
+                    return datos_filtrados, None
         return None, None
     except Exception as error:
         return None, str(error)
-
+    
 # Endpoints
-@app.route("/api/empresas", methods=["GET"])
+@app.route("/")
+def inicio():
+    return jsonify({
+        "Estado": "Probando la API",
+        "Probar en la barra de direcciones": [
+            "Buscar todas las empresas: http://localhost:5000/denue_inegi/consultarEmpresas",
+            "Buscar las empresas correspondientes por municipio: http://localhost:5000/denue_inegi/consultarEmpresas?municipio=escribirCiudad",
+            "Buscar empresas por su actividad: http://localhost:5000/denue_inegi/consultarEmpresas?id_actividad=escribirID",
+            "Buscar a una empresa por su ID para ver detalle: http://localhost:5000/denue_inegi/consultarEmpresas/escribirID"
+        ]
+    })
+
+
+@app.route("/denue_inegi/consultarEmpresas", methods=["GET"])
 def buscar_empresas(): 
     """Busca establecimientos según municipio y actividad."""
     municipio = request.args.get("municipio")
@@ -106,7 +132,7 @@ def buscar_empresas():
     query += " LIMIT 500"
     conexion = obtener_conexion()
 
-    #Si no hay conexión, se cierra el servidor para abrir el servidor de respaldo.
+    #Si hay conexión, se abre el servidor de SQLite, sino, se manda error.
     if conexion is not None:
         try:
             print('SQLite OK')
@@ -118,9 +144,9 @@ def buscar_empresas():
 
         except sqlite3.Error as error:
             conexion.close()
-            # Sigue al fallback CSV
+            # Sigue al respaldo de CSV
 
-    # Fallback: CSV
+    #Respaldo: Archivo separado por comas
     resultados, error_csv = leer_desde_csv(municipio, actividad)
     if error_csv:
         return jsonify({
@@ -133,7 +159,7 @@ def buscar_empresas():
 
     return jsonify(resultados), 200
 
-@app.route("/api/empresas/<int:id_empresa>", methods=["GET"])
+@app.route("/denue_inegi/consultarEmpresas/<int:id_empresa>", methods=["GET"])
 def detalle_empresa(id_empresa):
     """Devuelve el detalle de una empresa por su ID."""
     conexion = obtener_conexion()
