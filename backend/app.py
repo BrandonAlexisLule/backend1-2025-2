@@ -8,11 +8,10 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-DB_NAME = "dbinegi.db" #Variable para nombre de base de datos
-TABLE_NAME = "denue_inegi" #Variable para nombre de tabla
-CSV_FILE = "denue_inegi.csv"  # Archivo de respaldo externo
+DB_NAME = "dbinegi.db"
+TABLE_NAME = "denue_inegi"
+CSV_FILE = "denue_inegi.csv"
 
-#Columnas esperadas dentro del CSV
 CSV_COLUMNS = {
     "id": "id",
     "nom_estab": "nom_estab",
@@ -23,10 +22,7 @@ CSV_COLUMNS = {
     "longitud": "longitud",
 }
 
-#Creamos los endpoints
 def obtener_conexion():
-    """Abre la conexión con SQLite. Si falla, regresa None para levantar el respaldo de CSV."""
-    # Verifica primero si el archivo de la base existe
     if not os.path.exists(DB_NAME):
         print("SQLite no encontrado, usando respaldo CSV")
         return None
@@ -38,8 +34,7 @@ def obtener_conexion():
     except sqlite3.Error:
         return None
 
-def leer_desde_csv(municipio, actividad, limite=500):
-    """Busca registros en el archivo CSV cuando no hay conexión SQLite."""
+def leer_desde_csv(municipio, actividad, limite=1500):
     if not os.path.exists(CSV_FILE):
         return None, "No se encontró el archivo de respaldo."
     resultados = []
@@ -72,128 +67,70 @@ def leer_desde_csv(municipio, actividad, limite=500):
                     })
 
                     contador += 1
-                    if contador >= limite:
+                    if limite and contador >= limite:
                         break
 
         return resultados, None
     except Exception as error:
         return None, str(error)
 
-def buscar_detalle_csv(id_empresa):
-    """Busca un registro específico por ID dentro del CSV."""
-    if not os.path.exists(CSV_FILE):
-        return None, "No se encontró el archivo CSV."
-    try:
-        with open(CSV_FILE, encoding="utf-8", mode="r") as archivo:
-            lector = csv.DictReader(archivo)
-            # Limpiar encabezados por si traen BOM
-            if lector.fieldnames:
-                limpio = []
-                for col in lector.fieldnames:
-                    limpio.append(col.replace("\ufeff", "").strip())
-                lector.fieldnames = limpio
-            for fila in lector:
-                if fila.get(CSV_COLUMNS["id"]) == str(id_empresa):
-                    # Solo retornar las columnas que definiste en CSV_COLUMNS
-                    datos_filtrados = {
-                        clave: fila.get(columna, "")
-                        for clave, columna in CSV_COLUMNS.items()
-                    }
-                    return datos_filtrados, None
-        return None, None
-    except Exception as error:
-        return None, str(error)
-
-# Endpoints
 @app.route("/")
 def inicio():
     return jsonify({
         "Estado": "Probando la API",
-        "Probar en la barra de direcciones": [
-            "Buscar todas las empresas: http://localhost:5000/denue_inegi/consultarEmpresas",
-            "Buscar las empresas correspondientes por municipio: http://localhost:5000/denue_inegi/consultarEmpresas?municipio=escribirCiudad",
-            "Buscar empresas por su actividad: http://localhost:5000/denue_inegi/consultarEmpresas?id_actividad=escribirID",
-            "Buscar a una empresa por su ID para ver detalle: http://localhost:5000/denue_inegi/consultarEmpresas/escribirID"
+        "Probar": [
+            "http://localhost:5000/denue_inegi/consultarEmpresas",
         ]
     })
 
-
 @app.route("/denue_inegi/consultarEmpresas", methods=["GET"])
 def buscar_empresas(): 
-    """Busca establecimientos según municipio y actividad."""
     municipio = request.args.get("municipio")
     actividad = request.args.get("id_actividad")
-    query = f"""SELECT id, nom_estab, municipio, codigo_act, nombre_act, latitud, longitud FROM {TABLE_NAME} WHERE 1=1"""
+
+    query = f"""
+    SELECT id, nom_estab, municipio, codigo_act, nombre_act, latitud, longitud 
+    FROM {TABLE_NAME} 
+    WHERE 1=1
+    LIMIT 1500
+    """
 
     parametros = []
-    if municipio:
-        query += " AND municipio LIKE ?"
-        parametros.append(f"%{municipio}%")
-    if actividad:
-        query += " AND codigo_act = ?"
-        parametros.append(actividad)
-    query += " LIMIT 500"
     conexion = obtener_conexion()
 
-    #Si hay conexión, se abre el servidor de SQLite, sino, se manda error.
     if conexion is not None:
         try:
             print('Servidor usando SQLite')
+
+            filtro = " WHERE 1=1 "
+            if municipio:
+                filtro += " AND municipio LIKE ?"
+                parametros.append(f"%{municipio}%")
+            if actividad:
+                filtro += " AND codigo_act = ?"
+                parametros.append(actividad)
+
+            query = f"""
+            SELECT id, nom_estab, municipio, codigo_act, nombre_act, latitud, longitud 
+            FROM {TABLE_NAME}
+            {filtro}
+            LIMIT 1500
+            """
+
             filas = conexion.execute(query, parametros).fetchall()
             conexion.close()
-            if not filas:
-                return jsonify({"mensaje": "No se encontraron resultados."}), 404
+
             return jsonify([dict(fila) for fila in filas]), 200
 
         except sqlite3.Error as error:
             print(error)
             conexion.close()
-            # Sigue al respaldo de CSV
 
-    #Respaldo: Archivo separado por comas
-    resultados, error_csv = leer_desde_csv(municipio, actividad)
+    resultados, error_csv = leer_desde_csv(municipio, actividad, limite=1500)
     if error_csv:
-        return jsonify({
-            "error": "No se pudo obtener información ni desde SQLite ni desde el CSV.",
-            "detalle": error_csv
-        }), 500
-
-    if not resultados:
-        return jsonify({"mensaje": "No se encontraron resultados en el archivo de respaldo."}), 404
+        return jsonify({"error": error_csv}), 500
 
     return jsonify(resultados), 200
 
-@app.route("/denue_inegi/consultarEmpresas/<int:id_empresa>", methods=["GET"])
-def detalle_empresa(id_empresa):
-    """Devuelve el detalle de una empresa por su ID."""
-    conexion = obtener_conexion()
-
-    # Intento principal con SQLite
-    if conexion is not None:
-        try:
-            query = f"SELECT * FROM {TABLE_NAME} WHERE id = ?"
-            fila = conexion.execute(query, (id_empresa,)).fetchone()
-            conexion.close()
-            if fila is None:
-                return jsonify({"mensaje": "No existe una empresa con ese ID."}), 404
-            return jsonify(dict(fila)), 200
-
-        except sqlite3.Error:
-            conexion.close()
-            # sigue al respaldo del archivo por comas
-
-    # Respaldo por excel mediante archivo por comas
-    fila_csv, error_csv = buscar_detalle_csv(id_empresa)
-
-    if error_csv:
-        return jsonify({
-            "error": "Error crítico al consultar SQLite y CSV.",
-            "detalle": error_csv}), 500
-
-    if fila_csv is None:
-        return jsonify({"mensaje": "No existe una empresa con ese ID en el archivo de respaldo."}), 404
-    return jsonify(fila_csv), 200
-
-#Inicializar servidor
 if __name__ == "__main__":
     app.run(debug=True)
