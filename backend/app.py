@@ -1,9 +1,8 @@
+import sqlite3
 import os
 import csv
-import sqlite3
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
 
 #Configuración de la API
 app = Flask(__name__)
@@ -24,13 +23,18 @@ CSV_COLUMNS = {
     "longitud": "longitud",
 }
 
-#Creamos los endpoints 
+#Creamos los endpoints
 def obtener_conexion():
     """Abre la conexión con SQLite. Si falla, regresa None para levantar el respaldo de CSV."""
+    # Verifica primero si el archivo de la base existe
+    if not os.path.exists(DB_NAME):
+        print("SQLite no encontrado, usando respaldo CSV")
+        return None
     try:
-        conn = sqlite3.connect(DB_NAME)
-        conn.row_factory = sqlite3.Row
-        return conn
+        conexion = sqlite3.connect(DB_NAME)
+        conexion.row_factory = sqlite3.Row
+        print("SQLite: Trabajando realmente con SQLite")
+        return conexion
     except sqlite3.Error:
         return None
 
@@ -70,7 +74,7 @@ def leer_desde_csv(municipio, actividad, limite=500):
                     contador += 1
                     if contador >= limite:
                         break
-                    
+
         return resultados, None
     except Exception as error:
         return None, str(error)
@@ -99,7 +103,7 @@ def buscar_detalle_csv(id_empresa):
         return None, None
     except Exception as error:
         return None, str(error)
-    
+
 # Endpoints
 @app.route("/")
 def inicio():
@@ -119,8 +123,7 @@ def buscar_empresas():
     """Busca establecimientos según municipio y actividad."""
     municipio = request.args.get("municipio")
     actividad = request.args.get("id_actividad")
-    query = f"""SELECT id, nom_estab, municipio, codigo_act, nombre_act, latitud, longitud
-        FROM {TABLE_NAME} WHERE 1=1"""
+    query = f"""SELECT id, nom_estab, municipio, codigo_act, nombre_act, latitud, longitud FROM {TABLE_NAME} WHERE 1=1"""
 
     parametros = []
     if municipio:
@@ -135,7 +138,7 @@ def buscar_empresas():
     #Si hay conexión, se abre el servidor de SQLite, sino, se manda error.
     if conexion is not None:
         try:
-            print('SQLite OK')
+            print('Servidor usando SQLite')
             filas = conexion.execute(query, parametros).fetchall()
             conexion.close()
             if not filas:
@@ -143,6 +146,7 @@ def buscar_empresas():
             return jsonify([dict(fila) for fila in filas]), 200
 
         except sqlite3.Error as error:
+            print(error)
             conexion.close()
             # Sigue al respaldo de CSV
 
